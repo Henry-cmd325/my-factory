@@ -53,3 +53,7 @@ Every failure found by a slow tier is saved and replayed at T0 from then on.
 | [`skills/`](skills/) | The factory skills that agents follow |
 | [`AGENTS.md`](AGENTS.md) | Rules for any agent working on this repo |
 | [`CHANGELOG.md`](CHANGELOG.md) | Human-readable history |
+
+## License
+
+[Apache License 2.0](LICENSE)

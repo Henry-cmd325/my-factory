@@ -18,12 +18,17 @@ Stryker.NET changes the code on purpose (flips `>=` to `>`, removes a statement,
     "project": "<App>.Domain.csproj",
     "test-projects": ["<App>.Domain.Tests.csproj"],
     "reporters": ["progress", "html", "json"],
+    "test-runner": "mtp",
     "thresholds": { "high": 90, "low": 75, "break": 0 }
   }
 }
 ```
 
 `break: 0` means the score is measured, not enforced, until thresholds are agreed from experiment data.
+
+`"test-runner": "mtp"` is required for xUnit v3. With the default `vstest` runner, Stryker.NET 5.1 logs "test coverage capture failed" and reports **every** mutant as survived (0%) although the tests run (inventory run 1).
+
+**Sanity check before recording a score:** if every mutant survived, or the log says coverage capture failed, the runner is not wired. Fix the setup; never record that score.
 
 ## When it runs
 

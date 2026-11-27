@@ -46,10 +46,11 @@ public static class IssueStock
     internal static async Task<Results<Ok<IssueStockResponse>, NotFound>> Handle(
         string sku, IssueStockRequest request, IIssueStockStore store, CancellationToken ct)
     {
-        var parsed = Sku.Parse(sku);
+        var parsed = Sku.Parse(sku);                  // parse every input first:
+        var quantity = Quantity.From(request.Quantity); // bad input is 400 whatever is stored
         var loaded = await store.FindAsync(parsed, ct);
         if (loaded is null) return TypedResults.NotFound();
-        loaded.Item.Issue(request.Quantity);          // the domain enforces the rules
+        loaded.Item.Issue(quantity);                  // the domain enforces the rules
         await store.SaveAsync(loaded, ct);
         return TypedResults.Ok(new IssueStockResponse(loaded.Item.Sku.Value, loaded.Item.OnHand));
     }
@@ -57,6 +58,7 @@ public static class IssueStock
 ```
 
 - The handler only orchestrates: parse, load, call the domain, save, map. **No business rule in the handler.**
+- Parse **every** input into domain value objects before the first store call. Otherwise the answer to bad input depends on what is stored (inventory run 1: an invalid quantity on an unknown SKU answered 404 instead of 400).
 - Map request to domain and domain to response by hand, inside the slice. No mapping libraries.
 - Return `TypedResults` with a `Results<...>` union so the API shape is visible in the signature.
 - Split a slice into `.Contracts.cs`, `.Endpoint.cs`, `.Handler.cs`, `.Store.cs` only when the main file passes ~150 lines or the store has more than two queries.
@@ -64,7 +66,7 @@ public static class IssueStock
 ## Data access
 
 - Each slice owns `I<SliceName>Store` and `<SliceName>Store` in `<SliceName>.Store.cs`. The interface has only what this slice needs. No `IRepository<T>`.
-- PostgreSQL with `NpgsqlDataSource` and Dapper.AOT (`[module: DapperAot]`), explicit SQL.
+- PostgreSQL with `NpgsqlDataSource` and plain commands: `db.CreateCommand("... WHERE sku = $1")` with typed `NpgsqlParameter<T>`, read with `reader.GetInt32(0)`. No Dapper: even with Dapper.AOT 1.1.0 intercepting every call, Native AOT publish still reports 20+ trimming and AOT warnings from `Dapper.dll` (inventory run 1). Use `NpgsqlSlimDataSourceBuilder`.
 - Writes that can race use optimistic concurrency: the store keeps a `version` column next to the domain object and updates `WHERE version = @expected`. Zero rows changed means a `ConcurrencyConflictException`, which the API turns into 409.
 - Repeat critical domain rules as database constraints (`CHECK (on_hand >= 0)`) as defense in depth.
 
@@ -99,9 +101,10 @@ app.Run();
 ## Checks that prove it
 
 1. `dotnet build` is clean (warnings are errors).
-2. `dotnet publish -r linux-x64` produces a native binary with zero warnings. Record the binary size.
-3. HTTP tests in `<App>.Api.Tests` call every slice against a real PostgreSQL started by Docker Compose, including the error answers (400, 404, 409).
-4. Architecture tests: the domain references only the BCL, and no slice uses another slice's namespace.
+2. `dotnet publish -r linux-x64` produces a native binary with zero warnings. Record the binary size. **A clean build is not enough**: the build-time analyzers only check your code; warnings from packages appear only when ILC compiles the native binary. Run the publish (the Docker image build does it) before calling a change done.
+3. HTTP tests in `<App>.Api.Tests` call every slice against a real PostgreSQL started by Docker Compose, including the error answers (400, 404, 409), plus one model-based property per area: a random sequence of requests compared with a simple in-memory model, status codes included.
+4. Rules that can race (like "stock never negative") get a concurrency test: many parallel requests, then check the invariant.
+5. Architecture tests: the domain references only the BCL, no slice uses another slice's namespace, and slice file names start with the slice name.
 
 ## Never
 

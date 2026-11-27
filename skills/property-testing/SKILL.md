@@ -11,6 +11,7 @@ Example tests show that one case works. Properties show that a rule holds for ev
 
 - [CsCheck](https://github.com/AnthonyLloyd/CsCheck) with xUnit. Test project: `tests/<App>.Domain.Tests`.
 - One test file per aggregate or value object: `<Type>Properties.cs`.
+- CsCheck 5 API reminders: `Gen.Int[a, b]`, `Gen.Char["abc"]`, `Gen.String[Gen.Char["xy"], min, max]`, `Gen.OneOf(g1, g2)`, `Gen.Const(x)`, `Gen.Enum<T>()`, `Gen.Select(g1, g2)`, `g.Array[min, max]`. Do not name a field like a domain type (a `Gen<int> Quantity` field hides the `Quantity` type).
 
 ## What to write, for each rule
 
@@ -18,6 +19,10 @@ Example tests show that one case works. Properties show that a rule holds for ev
 2. **A failed operation changes nothing.** When a guard throws, the object is equal to its state before the call.
 3. **Valid input is accepted, invalid input is rejected.** Generate both sides of each boundary: just inside, just outside, far outside.
 4. **Round trips.** `Parse(x.ToString()) == x`, `Restore(state) == original`, "receive n then issue n" returns to the start.
+
+5. **Error messages name the rejected value.** Assert on the message (or part of it). Without this, mutation testing reports every message as a surviving mutant.
+
+The same model-based idea works one level up: generate random sequences of HTTP requests and compare status codes and bodies with the model (see `vertical-slice`). In inventory run 1 this property found a real bug that the example tests missed.
 
 Generate edge values on purpose: `0`, `1`, `-1`, `int.MaxValue`, empty strings, the longest allowed string and one more.
 
